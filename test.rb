@@ -34,9 +34,11 @@ end_of_xml
   end
 
   def test_everything
-    hash = Hash.from_xml(TEST_XML)
-    #hash = Hash.from_xml(File.read "")
-    puts @parser.traverse_nodes hash
+    #hash = Hash.from_xml(TEST_XML)
+    hash = Hash.from_xml(File.read "brs_real_response.xml")
+    #puts @parser.traverse_nodes hash
+    @parser.write_into 'parsed_data', hash
     @parser.print_unique_entities
   end
+
 end

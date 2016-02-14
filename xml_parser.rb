@@ -34,15 +34,19 @@ class Parser
   def generate_migration(model, attributes = nil, parent = nil)
     return if model.nil?
 
-    cmd = "rails g model #{model.camelize}"
+    cmd = "#rails g model #{model.camelize}"
     attributes.each { |a| cmd << " #{a.underscore}:string" } if attributes
     cmd << " #{parent.camelize}:references" if parent
     cmd
   end
 
+  def write_into(file_name, hash)
+    File.open("#{file_name}.rb", 'w') { |file| file << traverse_nodes(hash) }
+  end
+
   def traverse_nodes(node, node_name = nil, parent = nil)
     log = ''
-    log = "\nclass #{node_name.camelize}\n" unless node_name.nil?
+    log = "\nclass #{node_name.underscore.downcase.camelize}\n" unless node_name.nil?
 
     attributes = find_elements_and_nested(node)
 
@@ -60,9 +64,16 @@ class Parser
     end
     log += "\n"
 
+    model_create = "\n  ##{node_name.try(:camelize)}.create"
     attributes[:elements].each do |key|
-      log += "  #{key.underscore} => \"#{node[key]}\"\n"
+      model_create += " #{key.underscore}: \"#{node[key]}\","
+      log += "  ##{key.underscore} => \"#{node[key]}\"\n"
     end
+
+    model_create = model_create[0...-1] if model_create[model_create.size-1] == ','
+    model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
+
+    log += model_create + "\n"
 
     log += "end\n" unless node_name.nil?
 
