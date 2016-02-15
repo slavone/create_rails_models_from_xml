@@ -4,6 +4,7 @@ class Parser
 
   def initialize
     @unique_entities = []
+    @created_tables = {}
   end
 
   def print_unique_entities
@@ -31,17 +32,41 @@ class Parser
     result
   end
 
-  def generate_migration(model, attributes = nil, parent = nil)
+  def generate_migration(model, attributes = nil, parent = nil, namespace = nil)
     return if model.nil?
 
-    cmd = "#rails g model #{model.camelize}"
+    cmd = ''
+    if namespace
+      cmd = "rails g model #{namespace.downcase}/#{model.underscore.downcase.camelize}"
+    else
+      cmd = "rails g model #{model.underscore.downcase.camelize}"
+    end
     attributes.each { |a| cmd << " #{a.underscore}:string" } if attributes
-    cmd << " #{parent.camelize}:references" if parent
+    if namespace
+      cmd << " #{namespace.downcase}_#{parent.tableize}:references" if parent
+    else
+      cmd << " #{parent.tableize}:references" if parent
+    end
+    @created_tables[model] = true
+    system(cmd)
     cmd
   end
 
-  def write_into(file_name, hash)
-    File.open("#{file_name}.rb", 'w') { |file| file << traverse_nodes(hash) }
+  def create_tables(node, node_name = nil, parent = nil, namespace = nil)
+    log = ''
+
+    attributes = find_elements_and_nested(node)
+
+    log += "  #{generate_migration(node_name, attributes[:elements], parent, namespace)}\n\n" unless @created_tables[node_name]
+
+    attributes[:nested].each do |key|
+      if node[key].class == Array
+        node[key].each { |n| log += create_tables n, key, node_name, namespace }
+      else
+        log += create_tables node[key], key, node_name, namespace
+      end
+    end
+    log
   end
 
   def traverse_nodes(node, node_name = nil, parent = nil)
