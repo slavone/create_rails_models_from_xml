@@ -112,7 +112,11 @@ class Parser
     end
 
     model_create = model_create[0...-1] if model_create[model_create.size-1] == ','
-    model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
+    if namespace
+      model_create += ", #{namespace}_#{parent.underscore}_id: #{namespace.downcase.capitalize}::#{node_name.try(:camelize)}.last" if parent
+    else
+      model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
+    end
 
     #eval model_create
 
