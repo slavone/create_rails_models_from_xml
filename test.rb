@@ -7,8 +7,6 @@ class TestParser < MiniTest::Test
   TEST_XML = <<-end_of_xml
 <document>
   <firstEntity>
-    <firstParam attr='22323'>I am a the first param of the first entity</firstParam>
-    <secondParam>I am the second param of the first entity</secondParam>
     <secondEntity>
       <firstParam>I am a the first param of the second entity</firstParam>
       <secondParam>I am the second param of the second entity</secondParam>
@@ -35,10 +33,11 @@ end_of_xml
 
   def test_everything
     hash = Hash.from_xml(TEST_XML)
+    puts hash
     #hash = Hash.from_xml(File.read "brs_resp_2.xml")
     #puts @parser.create_tables hash, 'document'
     #@parser.write_into 'parsed_data', hash
     #@parser.print_unique_entities
-    puts @parser.save_data hash, 'document', nil, 'brs'
+    puts @parser.save_data hash, 'result', nil, 'brs'
   end
 end

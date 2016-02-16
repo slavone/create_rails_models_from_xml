@@ -43,18 +43,25 @@ class Parser
     end
     attributes.each { |a| cmd << " #{a.underscore}:string" } if attributes
     if namespace
-      cmd << " #{namespace.downcase}_#{parent.tableize}:references" if parent
+      cmd << " #{namespace.downcase}_#{parent.tableize.singularize}:references" if parent
     else
-      cmd << " #{parent.tableize}:references" if parent
+      cmd << " #{parent.tableize.singularize}:references" if parent
     end
     @created_tables[model] = true
     system(cmd)
     cmd
   end
 
-  def append_associations(node, node_name = nil, parent = nil, namespace = nil)
-    log = ''
+  CLASS_REGEXP = /^class.+$/
 
+  def append_to_class(filename, regexp, text)
+    old_text = File.read filename
+    class_line = old_text.match(regexp)[0] + "\n"
+    new_text = old_text.gsub regexp, (class_line + "#{text}\n")
+    File.open(filename, 'w') { |f| f << new_text }
+  end
+
+  def append_associations(node, node_name = nil, parent = nil, namespace = nil)
     dir = "./app/models/"
 
     dir += "#{namespace.downcase}/" if namespace
@@ -62,14 +69,26 @@ class Parser
     attributes = find_elements_and_nested(node)
 
     attributes[:nested].each do |key|
+      unless @created_tables[key]
+        if node[key].class == Array
+          text = "  has_many :#{key.tableize}"
+          append_to_class("#{dir}#{node_name.tableize.singularize}.rb", CLASS_REGEXP, text) if parent
+        else
+          text = "  has_one :#{key.tableize.singularize}"
+          append_to_class("#{dir}#{node_name.tableize.singularize}.rb", CLASS_REGEXP, text) if parent
+        end
+      end
+      @created_tables[key] = true
+    end
+
+    attributes[:nested].each do |key|
       if node[key].class == Array
-        node[key].each { |n| log += create_tables n, key, node_name, namespace }
+        node[key].each { |n| append_associations n, key, node_name, namespace }
       else
-        log += create_tables node[key], key, node_name, namespace
+        append_associations node[key], key, node_name, namespace
       end
     end
     @created_tables = {} unless parent #problematic
-    log
   end
 
   def create_tables(node, node_name = nil, parent = nil, namespace = nil)
@@ -113,11 +132,12 @@ class Parser
 
     model_create = model_create[0...-1] if model_create[model_create.size-1] == ','
     if namespace
-      model_create += ", #{namespace}_#{parent.underscore}_id: #{namespace.downcase.capitalize}::#{node_name.try(:camelize)}.last" if parent
+      model_create += ", #{namespace}_#{parent.underscore}_id: #{namespace.downcase.capitalize}::#{parent.try(:camelize)}.last" if parent
     else
-      model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
+      model_create += ", #{parent.underscore}_id: #{parent.camelize}.last.id" if parent
     end
 
+    model_create.gsub! /create,/, 'create'
     #eval model_create
 
     log += model_create + "\n"
@@ -132,49 +152,49 @@ class Parser
       end
     end
     log
-
   end
 
-  def traverse_nodes(node, node_name = nil, parent = nil)
-    log = ''
-    log = "\nclass #{node_name.underscore.downcase.camelize}\n" unless node_name.nil?
+  #proof of concept of the whole thing
+  #def traverse_nodes(node, node_name = nil, parent = nil)
+  #  log = ''
+  #  log = "\nclass #{node_name.underscore.downcase.camelize}\n" unless node_name.nil?
 
-    attributes = find_elements_and_nested(node)
+  #  attributes = find_elements_and_nested(node)
 
-    log += "  #{generate_migration(node_name, attributes[:elements], parent)}\n\n"
+  #  log += "  #{generate_migration(node_name, attributes[:elements], parent)}\n\n"
 
-    log += "  belongs_to :#{parent.tableize.singularize}\n" unless parent.nil?
+  #  log += "  belongs_to :#{parent.tableize.singularize}\n" unless parent.nil?
 
-    #system("rails g model #{node_name.camelize} [elements:string] parent:references")
-    attributes[:nested].each do |key|
-      if node[key].class == Array
-        log += "  has_many :#{key.tableize}\n"
-      else
-        log += "  have_one :#{key.tableize.singularize}\n"
-      end
-    end
-    log += "\n"
+  #  #system("rails g model #{node_name.camelize} [elements:string] parent:references")
+  #  attributes[:nested].each do |key|
+  #    if node[key].class == Array
+  #      log += "  has_many :#{key.tableize}\n"
+  #    else
+  #      log += "  have_one :#{key.tableize.singularize}\n"
+  #    end
+  #  end
+  #  log += "\n"
 
-    model_create = "\n  ##{node_name.try(:camelize)}.create"
-    attributes[:elements].each do |key|
-      model_create += " #{key.underscore}: \"#{node[key]}\","
-      log += "  ##{key.underscore} => \"#{node[key]}\"\n"
-    end
+  #  model_create = "\n  ##{node_name.try(:camelize)}.create"
+  #  attributes[:elements].each do |key|
+  #    model_create += " #{key.underscore}: \"#{node[key]}\","
+  #    log += "  ##{key.underscore} => \"#{node[key]}\"\n"
+  #  end
 
-    model_create = model_create[0...-1] if model_create[model_create.size-1] == ','
-    model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
+  #  model_create = model_create[0...-1] if model_create[model_create.size-1] == ','
+  #  model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
 
-    log += model_create + "\n"
+  #  log += model_create + "\n"
 
-    log += "end\n" unless node_name.nil?
+  #  log += "end\n" unless node_name.nil?
 
-    attributes[:nested].each do |key|
-      if node[key].class == Array
-        node[key].each { |n| log += traverse_nodes n, key, node_name }
-      else
-        log += traverse_nodes node[key], key, node_name
-      end
-    end
-    log
-  end
+  #  attributes[:nested].each do |key|
+  #    if node[key].class == Array
+  #      node[key].each { |n| log += traverse_nodes n, key, node_name }
+  #    else
+  #      log += traverse_nodes node[key], key, node_name
+  #    end
+  #  end
+  #  log
+  #end
 end
