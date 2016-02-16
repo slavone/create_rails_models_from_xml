@@ -34,10 +34,11 @@ end_of_xml
   end
 
   def test_everything
-    puts hash = Hash.from_xml(TEST_XML)
+    hash = Hash.from_xml(TEST_XML)
     #hash = Hash.from_xml(File.read "brs_resp_2.xml")
     #puts @parser.create_tables hash, 'document'
     #@parser.write_into 'parsed_data', hash
     #@parser.print_unique_entities
+    puts @parser.save_data hash, 'document', nil, 'brs'
   end
 end

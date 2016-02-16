@@ -52,6 +52,26 @@ class Parser
     cmd
   end
 
+  def append_associations(node, node_name = nil, parent = nil, namespace = nil)
+    log = ''
+
+    dir = "./app/models/"
+
+    dir += "#{namespace.downcase}/" if namespace
+
+    attributes = find_elements_and_nested(node)
+
+    attributes[:nested].each do |key|
+      if node[key].class == Array
+        node[key].each { |n| log += create_tables n, key, node_name, namespace }
+      else
+        log += create_tables node[key], key, node_name, namespace
+      end
+    end
+    @created_tables = {} unless parent #problematic
+    log
+  end
+
   def create_tables(node, node_name = nil, parent = nil, namespace = nil)
     log = ''
 
@@ -66,7 +86,49 @@ class Parser
         log += create_tables node[key], key, node_name, namespace
       end
     end
+    @created_tables = {} unless parent #problematic
     log
+  end
+
+  def save_data(node, node_name, parent = nil, namespace = nil)
+    log = "\nclass #{node_name.underscore.downcase.camelize}\n"
+
+    attributes = find_elements_and_nested(node)
+    model_create = ''
+    
+    if namespace
+      model_create = "\n  ##{namespace.downcase.capitalize}::#{node_name.try(:camelize)}.create"
+    else
+      model_create = "\n  ##{node_name.try(:camelize)}.create"
+    end
+
+    attributes[:elements].each do |key|
+      if namespace
+        model_create += " #{namespace.downcase}_#{key.underscore}: \"#{node[key]}\","
+      else
+        model_create += " #{key.underscore}: \"#{node[key]}\","
+      end
+      log += "  ##{key.underscore} => \"#{node[key]}\"\n"
+    end
+
+    model_create = model_create[0...-1] if model_create[model_create.size-1] == ','
+    model_create += ", #{parent.underscore}_id: #{parent.camelize}.last" if parent
+
+    #eval model_create
+
+    log += model_create + "\n"
+
+    log += "end\n" unless node_name.nil?
+
+    attributes[:nested].each do |key|
+      if node[key].class == Array
+        node[key].each { |n| log += save_data n, key, node_name, namespace }
+      else
+        log += save_data node[key], key, node_name, namespace
+      end
+    end
+    log
+
   end
 
   def traverse_nodes(node, node_name = nil, parent = nil)
